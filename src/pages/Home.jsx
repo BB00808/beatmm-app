@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import AudioPlayer from '../components/AudioPlayer'
 import GiftButtons from '../components/GiftButtons'
 import { Heart, Share, MessageCircle } from 'lucide-react'
+import { supabase } from '../services/supabase'
 
 export default function Home({ balance, updateBalance }) {
   const [currentSong, setCurrentSong] = useState({
@@ -13,6 +14,7 @@ export default function Home({ balance, updateBalance }) {
   
   const [isLiked, setIsLiked] = useState(false)
   const [likes, setLikes] = useState(2847)
+  const [totalDonations, setTotalDonations] = useState(0)
 
   const playlist = [
     {
@@ -35,10 +37,58 @@ export default function Home({ balance, updateBalance }) {
     }
   ]
 
-  const handleGift = (amount) => {
+  // 获取当前歌曲的打赏总额
+  useEffect(() => {
+    const fetchDonations = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('donations')
+          .select('amount')
+          .eq('song_name', currentSong.title)
+        
+        if (error) {
+          console.error('Error fetching donations:', error)
+          return
+        }
+
+        const total = data?.reduce((sum, donation) => sum + donation.amount, 0) || 0
+        setTotalDonations(total)
+      } catch (error) {
+        console.error('Error fetching donations:', error)
+        // 如果数据库查询失败，使用模拟数据
+        setTotalDonations(1250)
+      }
+    }
+
+    fetchDonations()
+  }, [currentSong.title])
+
+  const handleGift = async (amount) => {
     if (balance >= amount) {
       updateBalance(balance - amount)
-      // 这里可以添加动画效果
+      
+      try {
+        // 记录打赏到数据库
+        const { error } = await supabase
+          .from('donations')
+          .insert({
+            song_name: currentSong.title,
+            artist_name: currentSong.artist,
+            amount: amount,
+            user_id: (await supabase.auth.getUser()).data.user?.id,
+            created_at: new Date().toISOString()
+          })
+
+        if (error) {
+          console.error('Error recording donation:', error)
+        } else {
+          // 更新本地显示的打赏总额
+          setTotalDonations(prev => prev + amount)
+        }
+      } catch (error) {
+        console.error('Error recording donation:', error)
+      }
+      
       console.log(`打赏 ${amount} Beat币`)
     }
   }
@@ -70,6 +120,10 @@ export default function Home({ balance, updateBalance }) {
             </h2>
             <p className="text-gray-400 text-lg">
               {currentSong.artist}
+            </p>
+            {/* 显示打赏总额 */}
+            <p className="text-primary text-sm mt-2">
+              总打赏: {totalDonations} Beat币
             </p>
           </div>
 

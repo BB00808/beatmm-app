@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, QrCode, CreditCard, Upload, Check } from 'lucide-react'
 import { sendTelegramNotification, formatRechargeNotification } from './TelegramNotification'
+import { supabase } from '../services/supabase'
 
 export default function RechargeModal({ onClose, onRecharge }) {
   const [amount, setAmount] = useState(100)
@@ -44,29 +45,54 @@ export default function RechargeModal({ onClose, onRecharge }) {
   }
 
   const handleFinalConfirm = async () => {
-    // 准备通知数据
-    const notificationData = {
-      method: paymentMethod,
-      amount,
-      myanmarAmount: getMyanmarAmount(amount),
-      kbzInfo: paymentMethod === 'kbz' ? kbzInfo : null,
-      timestamp: new Date().toISOString()
+    try {
+      // 记录充值申请到数据库
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const rechargeData = {
+        user_id: user?.id,
+        amount: amount,
+        payment_method: paymentMethod,
+        status: 'pending',
+        myanmar_amount: getMyanmarAmount(amount),
+        created_at: new Date().toISOString()
+      }
+
+      // 如果是 KBZ Pay，添加转账信息
+      if (paymentMethod === 'kbz') {
+        rechargeData.sender_name = kbzInfo.senderName
+        rechargeData.transaction_id = kbzInfo.transactionId
+        rechargeData.transaction_time = kbzInfo.transactionTime
+      }
+
+      const { error } = await supabase.from('recharges').insert(rechargeData)
+
+      if (error) {
+        console.error('Error recording recharge:', error)
+        // 即使数据库记录失败，也继续发送通知
+      }
+
+      // 准备通知数据
+      const notificationData = {
+        method: paymentMethod,
+        amount,
+        myanmarAmount: getMyanmarAmount(amount),
+        kbzInfo: paymentMethod === 'kbz' ? kbzInfo : null,
+        timestamp: new Date().toISOString(),
+        userId: user?.id
+      }
+
+      // 发送 Telegram 通知给管理员
+      const message = formatRechargeNotification(notificationData)
+      await sendTelegramNotification(message)
+
+      // 关闭模态框
+      onClose()
+      
+      console.log('Recharge request submitted:', rechargeData)
+    } catch (error) {
+      console.error('Error submitting recharge:', error)
     }
-
-    // 发送 Telegram 通知给管理员
-    const message = formatRechargeNotification(notificationData)
-    await sendTelegramNotification(message)
-
-    // 这里应该发送到后端处理
-    onRecharge(amount)
-    
-    console.log('Payment submitted for review:', {
-      method: paymentMethod,
-      amount,
-      myanmarAmount: getMyanmarAmount(amount),
-      proof: paymentProof,
-      kbzInfo
-    })
   }
 
   const renderPaymentMethodSelection = () => (

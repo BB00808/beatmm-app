@@ -1,22 +1,85 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Wallet as WalletIcon, Plus, Minus, CreditCard, QrCode, History, Settings } from 'lucide-react'
 import RechargeModal from '../components/RechargeModal'
 import WithdrawForm from '../components/WithdrawForm'
 import AdminPanel from '../components/AdminPanel'
+import { supabase } from '../services/supabase'
 
 export default function Wallet({ balance, updateBalance }) {
   const [showRecharge, setShowRecharge] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false) // 简单的管理员状态，实际应该从认证系统获取
-  
-  const [transactions] = useState([
-    { id: 1, type: 'gift', amount: -20, desc: '打赏 DJ_音乐人', time: '2024-01-15 14:30' },
-    { id: 2, type: 'recharge', amount: +100, desc: '充值', time: '2024-01-15 10:15' },
-    { id: 3, type: 'gift', amount: -5, desc: '打赏 DJ_夜猫', time: '2024-01-14 22:45' },
-    { id: 4, type: 'gift', amount: -100, desc: '打赏 DJ_王者', time: '2024-01-14 20:20' },
-    { id: 5, type: 'recharge', amount: +200, desc: '充值', time: '2024-01-14 18:00' },
-  ])
+  const [userBalance, setUserBalance] = useState(balance)
+  const [transactions, setTransactions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // 获取用户余额和交易记录
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        // 尝试从 user_balance 表获取余额
+        const { data: balanceData, error: balanceError } = await supabase
+          .from('user_balance')
+          .select('balance')
+          .eq('user_id', user.id)
+          .single()
+
+        if (balanceError && balanceError.code !== 'PGRST116') {
+          console.error('Error fetching user balance:', balanceError)
+        }
+
+        // 如果有余额数据，使用数据库中的余额，否则使用传入的余额
+        if (balanceData) {
+          setUserBalance(balanceData.balance)
+          updateBalance(balanceData.balance)
+        } else {
+          // 如果没有余额记录，创建一个
+          const { error: insertError } = await supabase
+            .from('user_balance')
+            .insert({ user_id: user.id, balance: balance })
+
+          if (insertError) {
+            console.error('Error creating user balance:', insertError)
+          }
+        }
+
+        // 获取交易记录
+        const { data: transactionData, error: transactionError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10)
+
+        if (transactionError) {
+          console.error('Error fetching transactions:', transactionError)
+          // 使用模拟数据作为后备
+          setTransactions(getMockTransactions())
+        } else {
+          setTransactions(transactionData || [])
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+        setTransactions(getMockTransactions())
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUserData()
+  }, [balance, updateBalance])
+
+  const getMockTransactions = () => [
+    { id: 1, type: 'gift', amount: -20, description: '打赏 夜的钢琴曲', created_at: '2024-01-15T14:30:00Z' },
+    { id: 2, type: 'recharge', amount: +100, description: '充值', created_at: '2024-01-15T10:15:00Z' },
+    { id: 3, type: 'gift', amount: -5, description: '打赏 Canon in D', created_at: '2024-01-14T22:45:00Z' },
+    { id: 4, type: 'gift', amount: -100, description: '打赏 River Flows In You', created_at: '2024-01-14T20:20:00Z' },
+    { id: 5, type: 'recharge', amount: +200, description: '充值', created_at: '2024-01-14T18:00:00Z' },
+  ]
 
   const getTransactionIcon = (type) => {
     switch (type) {
@@ -46,7 +109,7 @@ export default function Wallet({ balance, updateBalance }) {
               </div>
               <div>
                 <p className="text-gray-400">Beat币余额</p>
-                <p className="text-3xl font-bold text-white">{balance}</p>
+                <p className="text-3xl font-bold text-white">{userBalance}</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -102,22 +165,36 @@ export default function Wallet({ balance, updateBalance }) {
         {/* 交易记录 */}
         <div>
           <h3 className="text-white font-medium mb-3">交易记录</h3>
-          <div className="space-y-3">
-            {transactions.map(tx => (
-              <div key={tx.id} className="glass-effect rounded-xl p-4 flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-full bg-dark-300 flex items-center justify-center">
-                  {getTransactionIcon(tx.type)}
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+              <p className="text-gray-400 text-sm">加载交易记录...</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {transactions.map(tx => (
+                <div key={tx.id} className="glass-effect rounded-xl p-4 flex items-center space-x-4">
+                  <div className="w-10 h-10 rounded-full bg-dark-300 flex items-center justify-center">
+                    {getTransactionIcon(tx.type)}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-white font-medium">{tx.description || tx.desc}</p>
+                    <p className="text-gray-400 text-sm">
+                      {tx.created_at ? new Date(tx.created_at).toLocaleString('zh-CN') : tx.time}
+                    </p>
+                  </div>
+                  <p className={`font-bold ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {tx.amount > 0 ? '+' : ''}{tx.amount} Beat币
+                  </p>
                 </div>
-                <div className="flex-1">
-                  <p className="text-white font-medium">{tx.desc}</p>
-                  <p className="text-gray-400 text-sm">{tx.time}</p>
+              ))}
+              {transactions.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">暂无交易记录</p>
                 </div>
-                <p className={`font-bold ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {tx.amount > 0 ? '+' : ''}{tx.amount} Beat币
-                </p>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

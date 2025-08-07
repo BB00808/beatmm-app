@@ -1,40 +1,78 @@
 import { useState } from 'react'
 import { Phone, MessageSquare } from 'lucide-react'
+import { supabase } from '../services/supabase'
+import { useNavigate } from 'react-router-dom'
 
 export default function Login({ onLogin }) {
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
   const [step, setStep] = useState('phone') // 'phone' | 'code'
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const navigate = useNavigate()
 
   const sendCode = async () => {
-    if (!phone || phone.length < 11) return
+    if (!phone || phone.length < 11) {
+      setError('请输入有效的手机号码')
+      return
+    }
     
     setLoading(true)
-    // 模拟发送验证码
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setStep('code')
-    setLoading(false)
+    setError('')
+    
+    try {
+      // 使用 Supabase Auth 发送 OTP
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: phone,
+        options: {
+          shouldCreateUser: true
+        }
+      })
+
+      if (error) {
+        console.error('Error sending OTP:', error)
+        setError('发送验证码失败，请重试')
+      } else {
+        setStep('code')
+      }
+    } catch (error) {
+      console.error('Error sending OTP:', error)
+      setError('发送验证码失败，请重试')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const verifyCode = async () => {
-    if (!code || code.length < 4) return
-    
-    setLoading(true)
-    // 模拟验证码验证
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const userData = {
-      phone,
-      nickname: `DJ_${phone.slice(-4)}`,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${phone}`
+    if (!code || code.length < 4) {
+      setError('请输入验证码')
+      return
     }
     
-    localStorage.setItem('beatmm_user', JSON.stringify(userData))
-    localStorage.setItem('beatmm_balance', '100') // 初始余额
+    setLoading(true)
+    setError('')
     
-    onLogin(userData)
-    setLoading(false)
+    try {
+      // 使用 Supabase Auth 验证 OTP
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: phone,
+        token: code,
+        type: 'sms'
+      })
+
+      if (error) {
+        console.error('Error verifying OTP:', error)
+        setError('验证码错误或已过期')
+      } else if (data.user) {
+        // 登录成功，导航到首页
+        navigate('/')
+      }
+    } catch (error) {
+      console.error('Error verifying OTP:', error)
+      setError('验证失败，请重试')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -47,6 +85,12 @@ export default function Login({ onLogin }) {
           <h1 className="text-3xl font-bold text-white mb-2">BeatMM</h1>
           <p className="text-gray-400">音乐打赏平台</p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+            <p className="text-red-400 text-sm text-center">{error}</p>
+          </div>
+        )}
 
         {step === 'phone' ? (
           <div className="space-y-6">

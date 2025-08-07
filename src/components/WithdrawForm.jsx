@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { X, Banknote, User, MessageSquare } from 'lucide-react'
+import { supabase } from '../services/supabase'
+import { sendTelegramNotification } from './TelegramNotification'
 
 export default function WithdrawForm({ balance, onClose, onWithdraw }) {
   const [amount, setAmount] = useState('')
@@ -22,14 +24,54 @@ export default function WithdrawForm({ balance, onClose, onWithdraw }) {
     setLoading(true)
     setMessage('')
 
-    // 模拟提现请求
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    try {
+      // 记录提现申请到数据库
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const withdrawData = {
+        user_id: user?.id,
+        amount: withdrawAmount,
+        account_number: account,
+        account_name: name,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }
 
-    // 假设提现成功
-    onWithdraw(withdrawAmount)
-    setMessage('提现请求已提交，请等待审核。')
-    setLoading(false)
-    onClose() // 提现成功后关闭弹窗
+      const { error } = await supabase.from('withdraws').insert(withdrawData)
+
+      if (error) {
+        console.error('Error recording withdraw:', error)
+        setMessage('提现申请提交失败，请重试')
+        setLoading(false)
+        return
+      }
+
+      // 发送 Telegram 通知给管理员
+      const telegramMessage = `💸 提现申请
+用户ID: ${user?.id}
+提现金额: ${withdrawAmount} Beat币
+账户号码: ${account}
+账户姓名: ${name}
+申请时间: ${new Date().toLocaleString('zh-CN')}
+
+请及时处理提现申请。`
+
+      await sendTelegramNotification(telegramMessage)
+
+      setMessage('提现请求已提交，请等待审核。')
+      
+      // 延迟关闭以显示成功消息
+      setTimeout(() => {
+        onClose()
+      }, 2000)
+
+      console.log('Withdraw request submitted:', withdrawData)
+    } catch (error) {
+      console.error('Error submitting withdraw:', error)
+      setMessage('提现申请提交失败，请重试')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
