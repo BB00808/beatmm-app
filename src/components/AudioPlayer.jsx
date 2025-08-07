@@ -121,7 +121,7 @@ export default function AudioPlayer({ song, playlist, onSongChange }) {
           value={isMuted ? 0 : volume}
           onChange={(e) => setVolume(parseFloat(e.target.value))}
           className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-          style={{ backgroundSize: `${(isMMuted ? 0 : volume) * 100}% 100%` }}
+          style={{ backgroundSize: `${(isMuted ? 0 : volume) * 100}% 100%` }}
         />
       </div>
     </div>

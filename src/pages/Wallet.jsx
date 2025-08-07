@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Wallet, Plus, Minus, CreditCard, QrCode, History } from 'lucide-react'
+import { Wallet as WalletIcon, Plus, Minus, CreditCard, QrCode, History } from 'lucide-react'
 import RechargeModal from '../components/RechargeModal'
 import WithdrawForm from '../components/WithdrawForm'
 
@@ -39,7 +39,7 @@ export default function Wallet({ balance, updateBalance }) {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center">
-                <Wallet className="text-white" size={24} />
+                <WalletIcon className="text-white" size={24} />
               </div>
               <div>
                 <p className="text-gray-400">Beat币余额</p>
