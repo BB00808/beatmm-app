@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { Wallet as WalletIcon, Plus, Minus, CreditCard, QrCode, History } from 'lucide-react'
+import { Wallet as WalletIcon, Plus, Minus, CreditCard, QrCode, History, Settings } from 'lucide-react'
 import RechargeModal from '../components/RechargeModal'
 import WithdrawForm from '../components/WithdrawForm'
+import AdminPanel from '../components/AdminPanel'
 
 export default function Wallet({ balance, updateBalance }) {
   const [showRecharge, setShowRecharge] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
+  const [showAdmin, setShowAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false) // 简单的管理员状态，实际应该从认证系统获取
   
   const [transactions] = useState([
     { id: 1, type: 'gift', amount: -20, desc: '打赏 DJ_音乐人', time: '2024-01-15 14:30' },
@@ -46,7 +49,18 @@ export default function Wallet({ balance, updateBalance }) {
                 <p className="text-3xl font-bold text-white">{balance}</p>
               </div>
             </div>
-            <QrCode className="text-gray-400" size={24} />
+            <div className="flex items-center space-x-2">
+              <QrCode className="text-gray-400" size={24} />
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAdmin(true)}
+                  className="text-gray-400 hover:text-primary transition-colors"
+                  title="管理员设置"
+                >
+                  <Settings size={24} />
+                </button>
+              )}
+            </div>
           </div>
           
           {/* 操作按钮 */}
@@ -107,6 +121,18 @@ export default function Wallet({ balance, updateBalance }) {
         </div>
       </div>
 
+      {/* 临时管理员激活按钮 - 仅用于演示 */}
+      {!isAdmin && (
+        <div className="fixed bottom-20 right-4">
+          <button
+            onClick={() => setIsAdmin(true)}
+            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs"
+          >
+            激活管理员
+          </button>
+        </div>
+      )}
+
       {showRecharge && (
         <RechargeModal 
           onClose={() => setShowRecharge(false)}
@@ -125,6 +151,13 @@ export default function Wallet({ balance, updateBalance }) {
             updateBalance(balance - amount)
             setShowWithdraw(false)
           }}
+        />
+      )}
+
+      {showAdmin && (
+        <AdminPanel 
+          isOpen={showAdmin}
+          onClose={() => setShowAdmin(false)}
         />
       )}
     </div>
