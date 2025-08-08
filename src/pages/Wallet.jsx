@@ -241,3 +241,4 @@ export default function Wallet({ balance, updateBalance }) {
   )
 }
 
+
