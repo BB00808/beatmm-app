@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import AudioPlayer from '../components/AudioPlayer'
 import GiftButtons from '../components/GiftButtons'
 import { Heart, Share, MessageCircle } from 'lucide-react'
